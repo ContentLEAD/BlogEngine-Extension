@@ -160,6 +160,11 @@ public class BraftonXMLHandler
                 content = newsarticles.Current.Value;
             }
 			
+			string extract = "";
+			XPathNodeIterator extractp = xpathNews.Select("/newsItem/extract");
+			while (extractp.MoveNext())
+				extract = extractp.Current.Value;
+			
             XPathNavigator xpathCat = getUrls(link, 3);
             Post post = new Post();
 			
@@ -195,16 +200,20 @@ public class BraftonXMLHandler
             XPathNodeIterator pic = xpathPic.Select("//photos/photo/instances/instance/url");
 			
             string picture = " ";
-            string[] picarray = new string[1]; //change to '2' for thumbnail
+            string[] picarray = new string[2]; //change to '2' for thumbnail
             int x = 0;
             while (pic.MoveNext())
             {
-                if (x < 1) //change to '2' for thumbnail
+                if (x == 0) //change to '2' for thumbnail
                     picarray[x] = "<img class=\"article_pic\" src=\"" + pic.Current.Value + "\">  ";
+				if (x == 1)
+					picarray[x] = "<img class=\"article_pic\" src=\"" + pic.Current.Value + "\">  ";
                 x++;
             }
 			
             post.Content = picarray[0] + content; //change '0' to '1' for thumbnail
+			if (!string.IsNullOrEmpty(extract))
+				post.Description = picarray[1] + extract;
             post.Author = "Admin"; //set author name here
             post.Import();
         }
