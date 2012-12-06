@@ -141,7 +141,9 @@ public class BraftonXMLHandler
      */
     private void loadXMLFeed()
     {
-
+		if (string.IsNullOrEmpty(_settings.GetSingleValue("ApiKey")))
+			return;
+		
         //initialize parser
         XPathNavigator xpath = getUrls("", 1);
         XPathNodeIterator articles = xpath.Select("//newsListItem");
