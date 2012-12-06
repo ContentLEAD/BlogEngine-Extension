@@ -207,7 +207,7 @@ public class BraftonXMLHandler
                 if (x == 0) //change to '2' for thumbnail
                     picarray[x] = "<img class=\"article_pic\" src=\"" + pic.Current.Value + "\">  ";
 				if (x == 1)
-					picarray[x] = "<img class=\"article_pic\" src=\"" + pic.Current.Value + "\">  ";
+					picarray[x] = "<img class=\"article_pic_thumb\" src=\"" + pic.Current.Value + "\">  ";
                 x++;
             }
 			
