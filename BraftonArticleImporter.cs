@@ -11,13 +11,19 @@ using BlogEngine.Core.Web.Extensions;
 
 namespace Brafton.BlogEngine
 {
-    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.3", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
+    /// <summary>
+    /// Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.
+    /// </summary>
+    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.4", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
     class BraftonArticleImporter
     {
         protected ExtensionSettings _settings;
         private static StreamWriter _logStream;
         private static object _logLock;
 
+        /// <summary>
+        /// Creates and attaches a new importer to the Post.Serving event.
+        /// </summary>
         public BraftonArticleImporter()
         {
             Initialize();
@@ -51,6 +57,16 @@ namespace Brafton.BlogEngine
         }
 
         protected void Import()
+        {
+            ImportArticles();
+
+            DateTime endTime = DateTime.Now;
+            TimeSpan elapsed = endTime - startTime;
+
+            Log(string.Format("Import finished; took {0}.", elapsed.ToString()), LogLevel.Debug);
+        }
+
+        private void ImportArticles()
         {
             if (string.IsNullOrEmpty(_settings.GetSingleValue("ApiKey")))
             {
@@ -139,11 +155,6 @@ namespace Brafton.BlogEngine
                 }
             }
             Post.Reload();
-
-            DateTime endTime = DateTime.Now;
-            TimeSpan elapsed = endTime - startTime;
-
-            Log(string.Format("Import finished; took {0}.", elapsed.ToString()), LogLevel.Debug);
         }
 
         private string AppendImageToContent(PhotoInstance photoInstance, string virtualPath, string content, string cssClass, string imageLink, bool useCaption)
@@ -317,6 +328,18 @@ namespace Brafton.BlogEngine
 
             settings.AddParameter("LastUpload", "Time of last upload");
             settings.AddValue("LastUpload", DateTime.MinValue.ToString("u"));
+
+            settings.AddParameter("ImportContent", "Import Content");
+            settings.SetParameterType("ImportContent", ParameterType.DropDown);
+            string[] contentTypes = { "Articles Only", "Videos Only", "Articles and Video" };
+            settings.AddValue("ImportContent", contentTypes, contentTypes[0]);
+
+            settings.AddParameter("VideoPublicKey", "Public Key");
+
+            settings.AddParameter("VideoSecretKey", "Secret Key");
+
+            settings.AddParameter("VideoFeedNumber", "Feed Number");
+            settings.SetParameterType("VideoFeedNumber", ParameterType.Integer);
 
             _settings = ExtensionManager.InitSettings("BraftonArticleImporter", settings);
         }
