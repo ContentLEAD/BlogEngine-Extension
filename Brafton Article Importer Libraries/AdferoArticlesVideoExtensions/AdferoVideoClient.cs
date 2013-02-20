@@ -11,16 +11,8 @@ namespace AdferoVideoDotNet.AdferoArticlesVideoExtensions
     public class AdferoVideoClient : AdferoArticles.AdferoClient
     {
         public AdferoVideoClient(string baseUri, string publicKey, string secretKey)
+            : base(baseUri, publicKey, secretKey)
         {
-            Regex reg = new Regex("^http://[a-z0-9-]+(.[a-z0-9-]+)*(:[0-9]+)?(/.*)?$", RegexOptions.IgnoreCase);
-            if (!reg.IsMatch(baseUri))
-                throw new ArgumentException("Not a valid uri");
-
-            if (!baseUri.EndsWith("/"))
-                baseUri += "/";
-
-            this.baseUri = baseUri;
-            this.credentials = new AdferoArticles.AdferoCredentials(publicKey, secretKey);
         }
 
         public AdferoVideoOutputsClient VideoOutputs()
