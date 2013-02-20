@@ -12,8 +12,27 @@ namespace AdferoVideoDotNet.AdferoArticles
     {
         public static string GetXmlFromUri(string uri)
         {
+            Uri u = new Uri(uri);
+            HttpWebRequest req = WebRequest.Create(uri) as HttpWebRequest;
+            if (!string.IsNullOrEmpty(u.UserInfo))
+            {
+                string userInfo = u.UserInfo;
+                string userName = userInfo;
+                string password = "";
+                int length = userInfo.IndexOf(':');
+                if (length != -1)
+                {
+                    userName = Uri.UnescapeDataString(userInfo.Substring(0, length));
+                    int startIndex = length + 1;
+                    password = Uri.UnescapeDataString(userInfo.Substring(startIndex, userInfo.Length - startIndex));
+                }
+
+                NetworkCredential networkCredential = new NetworkCredential(userName, password);
+                req.Credentials = networkCredential;
+            }
+
             XmlDocument doc = new XmlDocument();
-            doc.Load(uri);
+            doc.Load(req.GetResponse().GetResponseStream());
 
             return doc.OuterXml;
         }
