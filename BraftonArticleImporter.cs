@@ -115,6 +115,8 @@ namespace Brafton.BlogEngine
                 return;
             }
 
+            Log("Starting video import.", LogLevel.Debug);
+
             string baseUrl = "http://api.video.brafton.com/v2/";
             string basePhotoUrl = "http://pictures.directnews.co.uk/v2/";
             AdferoVideoClient videoClient = new AdferoVideoClient(baseUrl, publicKey, secretKey);
@@ -228,16 +230,16 @@ namespace Brafton.BlogEngine
                 string webrootAuthorityUri = global::BlogEngine.Core.Blog.CurrentInstance.AbsoluteWebRootAuthority.ToString();
                 string picsUri = webrootUri.Substring(webrootUri.IndexOf(webrootAuthorityUri) + webrootAuthorityUri.Length) + "pics/";
 
-                if (fullSizePhoto != null && ImportPhoto(fullSizePhoto, physicalPicsPath, out fullSizePhysicalPath))
+                if (fullSizePhoto != null && ImportPhoto(fullSizePhoto, physicalPicsPath, out fullSizePhysicalPath, out fullSizePhotoPath))
                 {
                     photoImportCount++;
-                    p.Content = AppendImageToContent(fullSizePhoto.Value, picsUri + Path.GetFileName(fullSizePhoto.Value.Url), p.Content, "article-img-frame", "", true);
+                    p.Content = AppendImageToContent(fullSizePhoto.Value, picsUri + fullSizePhotoPath, p.Content, "article-img-frame", "", true);
                 }
 
-                if (thumbnail != null && ImportPhoto(thumbnail, physicalPicsPath, out thumbnailPhysicalPath))
+                if (thumbnail != null && ImportPhoto(thumbnail, physicalPicsPath, out thumbnailPhysicalPath, out thumbnailPath))
                 {
                     photoImportCount++;
-                    p.Description = AppendImageToContent(thumbnail.Value, picsUri + Path.GetFileName(thumbnail.Value.Url), p.Description, "article-thumbnail-frame");
+                    p.Description = AppendImageToContent(thumbnail.Value, picsUri + thumbnailPath, p.Description, "article-thumbnail-frame");
                 }
 
                 if (photoImportCount > 0)
@@ -249,6 +251,8 @@ namespace Brafton.BlogEngine
 
         private void ImportCategories(Post p)
         {
+            List<Category> added = new List<Category>();
+
             foreach (Category c in p.Categories)
             {
                 Category ca = FindCategory(c);
@@ -257,12 +261,15 @@ namespace Brafton.BlogEngine
                     if (c.Save() == SaveAction.Insert)
                     {
                         Log(string.Format("Imported new category '{0}'.", c.Title.Trim()), LogLevel.Info);
-                        p.Categories.Add(c);
+                        added.Add(c);
                     }
                 }
                 else
-                    p.Categories.Add(ca);
+                    added.Add(ca);
             }
+
+            p.Categories.Clear();
+            p.Categories.AddRange(added);
         }
 
         private Post FindPost(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle a)
@@ -305,9 +312,9 @@ namespace Brafton.BlogEngine
             return AppendImageToContent(photoInstance, virtualPath, content, cssClass, "", false);
         }
 
-        private bool ImportPhoto(PhotoInstance? photoInstance, string picsPath, out string physicalPhotoPath)
+        private bool ImportPhoto(PhotoInstance? photoInstance, string picsPath, out string physicalPhotoPath, out string photoPath)
         {
-            string filename = Path.GetFileName(photoInstance.Value.Url);
+            string filename = photoInstance.Value.DestinationFileName;
             string physicalPath = Path.Combine(picsPath, filename);
             using (WebClient wc = new WebClient())
             {
@@ -319,11 +326,13 @@ namespace Brafton.BlogEngine
                 {
                     Log(string.Format("Error: Could not import photo '{0}': {1}", photoInstance.Value.Url, ex.Message), LogLevel.Error);
                     physicalPhotoPath = string.Empty;
+                    photoPath = string.Empty;
                     return false;
                 }
             }
 
             physicalPhotoPath = physicalPath;
+            photoPath = filename;
             return true;
         }
 
@@ -358,25 +367,27 @@ namespace Brafton.BlogEngine
                 int photoId = apho.SourcePhotoId;
                 AdferoVideoDotNet.AdferoPhotos.Photos.AdferoPhoto pho = photoClient.Photos().GetScaleLocationUrl(photoId, scaleAxis, scale);
                 string photoUrl = pho.LocationUri;
-                int qPos = photoUrl.IndexOf('?');
-                if (qPos >= 0)
-                    photoUrl = photoUrl.Substring(0, qPos);
                 string photoCaption = photos.Get(photoList.Items[0].Id).Fields["caption"];
 
                 enumeratedTypes.enumPhotoOrientation ori = enumeratedTypes.enumPhotoOrientation.Landscape;
                 if (scaleAxis == AdferoVideoDotNet.AdferoPhotos.Photos.AdferoScaleAxis.Y)
                     ori = enumeratedTypes.enumPhotoOrientation.Portrait;
 
+                string cleanedUrl = photoUrl;
+                if (cleanedUrl.IndexOf('?') >= 0)
+                    cleanedUrl = cleanedUrl.Substring(0, cleanedUrl.IndexOf('?'));
+
                 inst = new PhotoInstance()
                 {
                     AltText = photoCaption,
                     Caption = photoCaption,
-                    Height = int.Parse(apho.Fields["height"]),
+                    DestinationFileName = Slugify(article.Fields["title"]) + "-" + scale + Path.GetExtension(cleanedUrl),
+                    Height = 0,
                     Id = apho.Id,
                     Orientation = ori,
                     Type = enumeratedTypes.enumPhotoInstanceType.Custom,
                     Url = photoUrl,
-                    Width = int.Parse(apho.Fields["width"])
+                    Width = 0
                 };
             }
 
@@ -410,6 +421,13 @@ namespace Brafton.BlogEngine
                         phIns.Type = phIEn.Current.type;
                         phIns.Type = phType;
 
+                        string cleanedUrl = phIns.Url;
+                        if (cleanedUrl.IndexOf('?') >= 0)
+                            cleanedUrl = cleanedUrl.Substring(0, cleanedUrl.IndexOf('?'));
+
+                        string phTypeSlug = Slugify(phType);
+                        phIns.DestinationFileName = Slugify(ni.headline) + (phTypeSlug == "" ? "" : "-" + phTypeSlug) + Path.GetExtension(cleanedUrl);
+
                         found = true;
                         break;
                     }
@@ -431,6 +449,21 @@ namespace Brafton.BlogEngine
             return phIns;
         }
 
+        private string Slugify(enumeratedTypes.enumPhotoInstanceType phType)
+        {
+            switch (phType)
+            {
+                case enumeratedTypes.enumPhotoInstanceType.Small:
+                    return "small";
+                case enumeratedTypes.enumPhotoInstanceType.Medium:
+                    return "med";
+                case enumeratedTypes.enumPhotoInstanceType.Thumbnail:
+                    return "thumb";
+                default:
+                    return "";
+            }
+        }
+
         private Post ConvertToPost(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle article, AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategoriesClient categories, AdferoVideoClient videoClient)
         {
             Post p = new Post();
@@ -446,21 +479,7 @@ namespace Brafton.BlogEngine
             string embedCode = videoClient.VideoPlayers().GetWithFallback(article.Id, AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RedBean, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0),AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RcFlashPlayer, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0)).EmbedCode;
             p.Content = string.Format("<div class=\"videoContainer\">{0}</div> {1}", embedCode, article.Fields["content"]);
 
-            string importedDate = _settings.GetSingleValue("ImportedDate");
-            switch (importedDate)
-            {
-                case "Published Date":
-                    p.DateCreated = DateTime.Parse(article.Fields["publishDate"]);
-                    break;
-
-                case "Last Modified Date":
-                    p.DateCreated = DateTime.Parse(article.Fields["lastModifiedDate"]);
-                    break;
-
-                default:
-                    p.DateCreated = DateTime.Parse(article.Fields["createdDate"]);
-                    break;
-            }
+            p.DateCreated = DateTime.Parse(article.Fields["date"]);
             p.DateModified = DateTime.Parse(article.Fields["lastModifiedDate"]);
             p.Description = article.Fields["extract"];
 
@@ -526,7 +545,7 @@ namespace Brafton.BlogEngine
             string[] providers = { "http://api.brafton.com/", "http://api.contentlead.com/", "http://api.castleford.com.au/" };
             settings.AddValue("BaseUrl", providers, providers[0]);
 
-            settings.AddParameter("ApiKey", "API Key", 36, true);
+            settings.AddParameter("ApiKey", "API Key", 36);
 
             settings.AddParameter("Interval", "Upload Interval (minutes)", 6, true);
             settings.AddValue("Interval", 180);
@@ -607,5 +626,6 @@ namespace Brafton.BlogEngine
         public string Url, Caption, AltText;
         public enumeratedTypes.enumPhotoInstanceType Type;
         public enumeratedTypes.enumPhotoOrientation Orientation;
+        public string DestinationFileName;
     }
 }
