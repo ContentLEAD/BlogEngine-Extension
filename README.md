@@ -19,7 +19,7 @@ These settings are for the version 0.4; if you have a lower version please updat
 These settings are **required** for the importer to work properly.
 
 - **Feed Provider**: The domain from where your articles are served from. This will match the information given to you by your account manager.
-- **API Key**: Your unique access key. This will match the information given to you by your account manager.
+- **API Key**: Your unique access key, in the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. This will match the information given to you by your account manager.
 - **Upload Interval**: How often the importer will check for new posts, in minutes. *It is highly recommended* that you leave it at the default value of **180**. Lower values can cause excess strain on your server.
 
 ### Advanced Settings ###
@@ -32,10 +32,8 @@ These settings are **optional**, and care should be taken when undergoing modifi
 - **Time of Last Upload**: Marks the last time the importer was run, successfully or otherwise. *Please do not make changes to this date.*
 - **Import Content**: Content types that will be imported. This should be set to **Articles Only** unless you have signed up for a video subscription.
 - **Public Key**: Your public key for video subscriptions. This should be blank unless you have signed up for a video subscription.
-- **Secret Key**: Your unique, private key for video subscriptions. This should be blank unless you have signed up for a video subscription.
+- **Secret Key**: Your unique, private key for video subscriptions, in the format `xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx`. This should be blank unless you have signed up for a video subscription.
 - **Feed Number**: The feed number for video subscriptions. This should be blank unless you have signed up for a video subscription.
 
 ## Debugging ##
-The importer stores a detailed log of its state and actions within **App_Data/BraftonArticleImporter.log**. You are free to delete, rename, or move this file, as the importer will create a new one in its place.
-
-When contacting support, *please include this file* to facilitate a quick response.
+The importer stores a detailed log of its state and actions within **App_Data/BraftonArticleImporter.log**. When contacting support, *please include this file* to facilitate a quick response.
