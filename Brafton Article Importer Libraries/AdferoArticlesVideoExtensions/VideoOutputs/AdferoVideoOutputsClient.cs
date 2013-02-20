@@ -104,30 +104,30 @@ namespace AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoOutputs
         {
             AdferoVideoOutput videoOutput = new AdferoVideoOutput();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            foreach (XmlNode n in doc.SelectNodes("/videoOutput/node()"))
+            foreach (XmlNode n in doc.SelectNodes("//videoOutput/node()"))
             {
                 switch (n.Name)
                 {
                     case "id":
-                        videoOutput.Id = int.Parse(n.Value);
+                        videoOutput.Id = int.Parse(n.InnerText);
                         break;
 
                     case "type":
-                        videoOutput.Type = n.Value;
+                        videoOutput.Type = n.InnerText;
                         break;
 
                     case "width":
-                        videoOutput.Width = int.Parse(n.Value);
+                        videoOutput.Width = int.Parse(n.InnerText);
                         break;
 
                     case "height":
-                        videoOutput.Height = int.Parse(n.Value);
+                        videoOutput.Height = int.Parse(n.InnerText);
                         break;
 
                     case "path":
-                        videoOutput.Path = n.Value;
+                        videoOutput.Path = n.InnerText;
                         break;
 
                     default:
@@ -154,17 +154,17 @@ namespace AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoOutputs
         private AdferoVideoOutputList ListVideoOutputsFromXmlString(string xml)
         {
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
-            int totalCount = int.Parse(doc.SelectSingleNode("/videoOutputs").Attributes["totalCount"].Value);
+            doc.LoadXml(xml);
+            int totalCount = int.Parse(doc.SelectSingleNode("//videoOutputs").Attributes["totalCount"].Value);
             AdferoVideoOutputList videoOutputs = new AdferoVideoOutputList();
             videoOutputs.TotalCount = totalCount;
 
-            foreach (XmlNode n in doc.SelectNodes("/videoOutputs/videoOutput"))
+            foreach (XmlNode n in doc.SelectNodes("//videoOutputs/videoOutput"))
             {
-                foreach (XmlNode na in n.SelectNodes("/id"))
+                foreach (XmlNode na in n.SelectNodes("id"))
                 {
                     AdferoVideoOutputListItem videoOutput = new AdferoVideoOutputListItem();
-                    videoOutput.Id = int.Parse(na.Value);
+                    videoOutput.Id = int.Parse(na.InnerText);
                     videoOutputs.Items.Add(videoOutput);
                 }
             }

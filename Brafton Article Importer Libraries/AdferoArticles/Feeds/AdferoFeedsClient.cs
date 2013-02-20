@@ -104,26 +104,26 @@ namespace AdferoVideoDotNet.AdferoArticles.Feeds
         {
             AdferoFeed feed = new AdferoFeed();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            foreach (XmlNode n in doc.SelectNodes("/feed/node()"))
+            foreach (XmlNode n in doc.SelectNodes("//feed/node()"))
             {
                 switch (n.Name)
                 {
                     case "id":
-                        feed.Id = int.Parse(n.Value);
+                        feed.Id = int.Parse(n.InnerText);
                         break;
 
                     case "name":
-                        feed.Name = n.Value;
+                        feed.Name = n.InnerText;
                         break;
 
                     case "state":
-                        feed.State = n.Value;
+                        feed.State = n.InnerText;
                         break;
 
                     case "timeZone":
-                        feed.TimeZone = n.Value;
+                        feed.TimeZone = n.InnerText;
                         break;
 
                     default:
@@ -150,17 +150,17 @@ namespace AdferoVideoDotNet.AdferoArticles.Feeds
         private AdferoFeedList ListFeedsFromXmlString(string xml)
         {
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
-            int totalCount = int.Parse(doc.SelectSingleNode("/feeds").Attributes["totalCount"].Value);
+            doc.LoadXml(xml);
+            int totalCount = int.Parse(doc.SelectSingleNode("//feeds").Attributes["totalCount"].Value);
             AdferoFeedList feedsList = new AdferoFeedList();
             feedsList.TotalCount = totalCount;
 
-            foreach (XmlNode n in doc.SelectNodes("/feeds/feed"))
+            foreach (XmlNode n in doc.SelectNodes("//feeds/feed"))
             {
-                foreach (XmlNode na in n.SelectNodes("/id"))
+                foreach (XmlNode na in n.SelectNodes("id"))
                 {
                     AdferoFeedListItem feed = new AdferoFeedListItem();
-                    feed.Id = int.Parse(na.Value);
+                    feed.Id = int.Parse(na.InnerText);
                     feedsList.Items.Add(feed);
                 }
             }

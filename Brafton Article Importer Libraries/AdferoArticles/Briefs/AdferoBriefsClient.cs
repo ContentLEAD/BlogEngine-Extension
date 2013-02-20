@@ -104,22 +104,22 @@ namespace AdferoVideoDotNet.AdferoArticles.Briefs
         {
             AdferoBrief brief = new AdferoBrief();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            foreach (XmlNode n in doc.SelectNodes("/brief/node()"))
+            foreach (XmlNode n in doc.SelectNodes("//brief/node()"))
             {
                 switch (n.Name)
                 {
                     case "id":
-                        brief.Id = int.Parse(n.Value);
+                        brief.Id = int.Parse(n.InnerText);
                         break;
 
                     case "name":
-                        brief.Name = n.Value;
+                        brief.Name = n.InnerText;
                         break;
 
                     case "feedId":
-                        brief.FeedId = int.Parse(n.Value);
+                        brief.FeedId = int.Parse(n.InnerText);
                         break;
 
                     default:
@@ -146,17 +146,17 @@ namespace AdferoVideoDotNet.AdferoArticles.Briefs
         private AdferoBriefList ListBriefsFromXmlString(string xml)
         {
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
-            int totalCount = int.Parse(doc.SelectSingleNode("/briefs").Attributes["totalCount"].Value);
+            doc.LoadXml(xml);
+            int totalCount = int.Parse(doc.SelectSingleNode("//briefs").Attributes["totalCount"].Value);
             AdferoBriefList briefItems = new AdferoBriefList();
             briefItems.TotalCount = totalCount;
 
-            foreach (XmlNode n in doc.SelectNodes("/briefs/brief"))
+            foreach (XmlNode n in doc.SelectNodes("//briefs/brief"))
             {
-                foreach (XmlNode na in n.SelectNodes("/id"))
+                foreach (XmlNode na in n.SelectNodes("id"))
                 {
                     AdferoBriefListItem brief = new AdferoBriefListItem();
-                    brief.Id = int.Parse(na.Value);
+                    brief.Id = int.Parse(na.InnerText);
                     briefItems.Items.Add(brief);
                 }
             }

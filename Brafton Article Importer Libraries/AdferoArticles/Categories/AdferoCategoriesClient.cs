@@ -138,22 +138,22 @@ namespace AdferoVideoDotNet.AdferoArticles.Categories
         {
             AdferoCategory category = new AdferoCategory();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            foreach (XmlNode n in doc.SelectNodes("/category/node()"))
+            foreach (XmlNode n in doc.SelectNodes("//category/node()"))
             {
                 switch (n.Name)
                 {
                     case "id":
-                        category.Id = int.Parse(n.Value);
+                        category.Id = int.Parse(n.InnerText);
                         break;
 
                     case "name":
-                        category.Name = n.Value;
+                        category.Name = n.InnerText;
                         break;
 
                     case "parentId":
-                        category.ParentId = int.Parse(n.Value);
+                        category.ParentId = int.Parse(n.InnerText);
                         break;
 
                     default:
@@ -193,17 +193,17 @@ namespace AdferoVideoDotNet.AdferoArticles.Categories
         private AdferoCategoryList ListCategoriesFromXmlString(string xml)
         {
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
-            int totalCount = int.Parse(doc.SelectSingleNode("/categories").Attributes["totalCount"].Value);
+            doc.LoadXml(xml);
+            int totalCount = int.Parse(doc.SelectSingleNode("//categories").Attributes["totalCount"].Value);
             AdferoCategoryList categoryItems = new AdferoCategoryList();
             categoryItems.TotalCount = totalCount;
 
-            foreach (XmlNode n in doc.SelectNodes("/categories/category"))
+            foreach (XmlNode n in doc.SelectNodes("//categories/category"))
             {
-                foreach (XmlNode na in n.SelectNodes("/id"))
+                foreach (XmlNode na in n.SelectNodes("id"))
                 {
                     AdferoCategoryListItem category = new AdferoCategoryListItem();
-                    category.Id = int.Parse(na.Value);
+                    category.Id = int.Parse(na.InnerText);
                     categoryItems.Items.Add(category);
                 }
             }

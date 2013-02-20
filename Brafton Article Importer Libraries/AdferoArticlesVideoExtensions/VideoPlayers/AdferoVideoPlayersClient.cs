@@ -123,14 +123,14 @@ namespace AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers
         {
             AdferoVideoPlayer videoPlayer = new AdferoVideoPlayer();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            foreach (XmlNode n in doc.SelectNodes("/player/node()"))
+            foreach (XmlNode n in doc.SelectNodes("//player/node()"))
             {
                 switch (n.Name)
                 {
                     case "embedCode":
-                        videoPlayer.EmbedCode = n.Value;
+                        videoPlayer.EmbedCode = n.InnerText;
                         break;
 
                     default:

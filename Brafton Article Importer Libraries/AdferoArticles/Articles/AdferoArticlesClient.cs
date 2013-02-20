@@ -179,29 +179,29 @@ namespace AdferoVideoDotNet.AdferoArticles.Articles
             AdferoArticle article = new AdferoArticle();
             Dictionary<string, string> fields = new Dictionary<string, string>();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            XmlNodeList children = doc.SelectNodes("/article/node()");
+            XmlNodeList children = doc.SelectNodes("//article/node()");
 
             foreach (XmlNode n in children)
             {
                 switch (n.Name)
                 {
                     case "id":
-                        article.Id = int.Parse(n.Value);
+                        article.Id = int.Parse(n.InnerText);
                         break;
 
                     case "briefId":
-                        article.FeedId = int.Parse(n.Value);
+                        article.FeedId = int.Parse(n.InnerText);
                         break;
 
                     case "state":
-                        article.State = n.Value;
+                        article.State = n.InnerText;
                         break;
 
                     case "fields":
                         foreach (XmlNode f in n.ChildNodes)
-                            article.Fields.Add(f.Name, f.Value);
+                            article.Fields.Add(f.Attributes["name"].Value, f.InnerText);
                         break;
 
                     default:
@@ -215,17 +215,17 @@ namespace AdferoVideoDotNet.AdferoArticles.Articles
         private AdferoArticleList ListArticlesFromXmlString(string xml)
         {
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
-            int totalCount = int.Parse(doc.SelectSingleNode("/articles").Attributes["totalCount"].Value);
+            doc.LoadXml(xml);
+            int totalCount = int.Parse(doc.SelectSingleNode("//articles").Attributes["totalCount"].Value);
             AdferoArticleList articleList = new AdferoArticleList();
             articleList.TotalCount = totalCount;
 
-            foreach (XmlNode n in doc.SelectNodes("/articles/article"))
+            foreach (XmlNode n in doc.SelectNodes("//articles/article"))
             {
-                foreach (XmlNode na in n.SelectNodes("/id"))
+                foreach (XmlNode na in n.SelectNodes("id"))
                 {
                     AdferoArticleListItem article = new AdferoArticleListItem();
-                    article.Id = int.Parse(na.Value);
+                    article.Id = int.Parse(na.InnerText);
                     articleList.Items.Add(article);
                 }
             }

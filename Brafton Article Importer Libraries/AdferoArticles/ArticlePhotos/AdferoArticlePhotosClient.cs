@@ -29,25 +29,25 @@ namespace AdferoVideoDotNet.AdferoArticles.ArticlePhotos
             AdferoArticlePhoto articlePhoto = new AdferoArticlePhoto();
             Dictionary<string, string> fields = new Dictionary<string, string>();
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
+            doc.LoadXml(xml);
 
-            XmlNodeList children = doc.SelectNodes("/articlePhoto/node()");
+            XmlNodeList children = doc.SelectNodes("//articlePhoto/node()");
 
             foreach (XmlNode n in children)
             {
                 switch (n.Name)
                 {
                     case "id":
-                        articlePhoto.Id = int.Parse(n.Value);
+                        articlePhoto.Id = int.Parse(n.InnerText);
                         break;
 
                     case "sourcePhotoId":
-                        articlePhoto.SourcePhotoId = int.Parse(n.Value);
+                        articlePhoto.SourcePhotoId = int.Parse(n.InnerText);
                         break;
 
                     case "fields":
                         foreach (XmlNode f in n.ChildNodes)
-                            articlePhoto.Fields.Add(f.Name, f.Value);
+                            articlePhoto.Fields.Add(f.Attributes["name"].Value, f.InnerText);
                         break;
 
                     default:
@@ -139,17 +139,17 @@ namespace AdferoVideoDotNet.AdferoArticles.ArticlePhotos
         private AdferoArticlePhotoList ListArticlePhotosFromXmlString(string xml)
         {
             XmlDocument doc = new XmlDocument();
-            doc.Load(xml);
-            int totalCount = int.Parse(doc.SelectSingleNode("/articlePhotos").Attributes["totalCount"].Value);
+            doc.LoadXml(xml);
+            int totalCount = int.Parse(doc.SelectSingleNode("//articlePhotos").Attributes["totalCount"].Value);
             AdferoArticlePhotoList articlesPhotosList = new AdferoArticlePhotoList();
             articlesPhotosList.TotalCount = totalCount;
 
-            foreach (XmlNode n in doc.SelectNodes("/articlePhotos/articlePhoto"))
+            foreach (XmlNode n in doc.SelectNodes("//articlePhotos/articlePhoto"))
             {
-                foreach (XmlNode na in n.SelectNodes("/id"))
+                foreach (XmlNode na in n.SelectNodes("id"))
                 {
                     AdferoArticlePhotoListItem item = new AdferoArticlePhotoListItem();
-                    item.Id = int.Parse(na.Value);
+                    item.Id = int.Parse(na.InnerText);
                     articlesPhotosList.Items.Add(item);
                 }
             }
