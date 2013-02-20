@@ -75,7 +75,7 @@ namespace AdferoVideoDotNet.AdferoPhotos.Photos
             return photo;
         }
 
-        public AdferoPhoto GetScaleLocationUrl(int id, string scaleAxis, float scale)
+        public AdferoPhoto GetScaleLocationUrl(int id, string scaleAxis, int scale)
         {
             if (id < 0)
                 throw new ArgumentOutOfRangeException("id", "id must be a positive integer.");
@@ -107,7 +107,7 @@ namespace AdferoVideoDotNet.AdferoPhotos.Photos
             return photo;
         }
 
-        public AdferoPhoto GetCropScaleLocationUrl(int id, int? cropWidth, int? cropHeight, int? focalPointX, int? focalPointY, string scaleAxis, float scale)
+        public AdferoPhoto GetCropScaleLocationUrl(int id, int? cropWidth, int? cropHeight, int? focalPointX, int? focalPointY, string scaleAxis, int scale)
         {
             if (id < 0)
                 throw new ArgumentOutOfRangeException("id", "id must be a positive integer.");
