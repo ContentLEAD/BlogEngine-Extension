@@ -8,16 +8,25 @@ using System.Web;
 using BlogEngine.Core;
 using BlogEngine.Core.Web.Controls;
 using BlogEngine.Core.Web.Extensions;
+using AdferoVideoDotNet.AdferoArticles;
+using AdferoVideoDotNet.AdferoArticlesVideoExtensions;
+using AdferoVideoDotNet.AdferoPhotos;
 
 namespace Brafton.BlogEngine
 {
-    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.3", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
+    /// <summary>
+    /// Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.
+    /// </summary>
+    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.4", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
     class BraftonArticleImporter
     {
         protected ExtensionSettings _settings;
         private static StreamWriter _logStream;
         private static object _logLock;
 
+        /// <summary>
+        /// Creates and attaches a new importer to the Post.Serving event.
+        /// </summary>
         public BraftonArticleImporter()
         {
             Initialize();
@@ -52,82 +61,97 @@ namespace Brafton.BlogEngine
 
         protected void Import()
         {
-            if (string.IsNullOrEmpty(_settings.GetSingleValue("ApiKey")))
+            DateTime startTime = DateTime.Now;
+
+            string importContent = _settings.GetSingleValue("ImportContent");
+            switch (importContent)
             {
-                Log("API key not set. Stopping.", LogLevel.Notice);
+                case "Articles Only":
+                    ImportArticles();
+                    break;
+
+                case "Videos Only":
+                    ImportVideos();
+                    break;
+
+                case "Articles and Video":
+                    ImportArticles();
+                    ImportVideos();
+                    break;
+
+                default:
+                    break;
+            }
+
+            Post.Reload();
+
+            DateTime endTime = DateTime.Now;
+            TimeSpan elapsed = endTime - startTime;
+
+            Log(string.Format("Import finished; took {0}.", elapsed.ToString()), LogLevel.Debug);
+        }
+
+        private void ImportVideos()
+        {
+            string publicKey = _settings.GetSingleValue("VideoPublicKey");
+            string secretKey = _settings.GetSingleValue("VideoSecretKey");
+            int feedNumber = -1;
+
+            if (!int.TryParse(_settings.GetSingleValue("VideoFeedNumber"), out feedNumber))
+            {
+                Log("Invalid video feed number. Stopping.", LogLevel.Error);
                 return;
             }
 
-            string apiKey = _settings.GetSingleValue("ApiKey");
-            string baseUrl = _settings.GetSingleValue("BaseUrl");
-
-            Uri baseUri = new Uri(baseUrl);
-            Uri feedUri = new Uri(baseUri, apiKey);
-
-            Log(string.Format("Starting import at feed URI '{0}'.", feedUri.ToString()), LogLevel.Debug);
-            ApiContext api = new ApiContext(apiKey, baseUrl);
-
-            DateTime startTime = DateTime.Now;
-
-            foreach (newsItem ni in api.News)
+            if (!ValidateVideoPublicKey(publicKey))
             {
-                Post p = FindPost(ni);
+                Log("Invalid video public key. Stopping.", LogLevel.Error);
+                return;
+            }
+
+            if (!ValidateGuid(secretKey))
+            {
+                Log("Invalid video secret key. Stopping.", LogLevel.Error);
+                return;
+            }
+
+            Log("Starting video import.", LogLevel.Debug);
+
+            string baseUrl = "http://api.video.brafton.com/v2/";
+            string basePhotoUrl = "http://pictures.directnews.co.uk/v2/";
+            AdferoVideoClient videoClient = new AdferoVideoClient(baseUrl, publicKey, secretKey);
+            AdferoClient client = new AdferoClient(baseUrl, publicKey, secretKey);
+            AdferoPhotoClient photoClient = new AdferoPhotoClient(basePhotoUrl);
+
+            AdferoVideoDotNet.AdferoArticles.ArticlePhotos.AdferoArticlePhotosClient photos = client.ArticlePhotos();
+            string scaleAxis = AdferoVideoDotNet.AdferoPhotos.Photos.AdferoScaleAxis.X;
+
+            AdferoVideoDotNet.AdferoArticles.Feeds.AdferoFeedsClient feeds = client.Feeds();
+            AdferoVideoDotNet.AdferoArticles.Feeds.AdferoFeedList feedList = feeds.ListFeeds(0, 10);
+
+            AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticlesClient articles = client.Articles();
+            AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticleList articleList = articles.ListForFeed(feedList.Items[feedNumber].Id, "live", 0, 100);
+
+            int articleCount = articleList.Items.Count;
+            AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategoriesClient categories = client.Categories();
+
+            foreach (AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticleListItem item in articleList.Items)
+            {
+                int brafId = item.Id;
+                AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle article = articles.Get(brafId);
+
+                Post p = FindPost(article);
 
                 if (p == null)
                 {
-                    Log(string.Format("Importing new post '{0}' (ID {1}).", ni.headline.Trim(), ni.id), LogLevel.Info);
-                    p = ConvertToPost(ni);
+                    Log(string.Format("Importing new post '{0}' (ID {1}).", article.Fields["title"].Trim(), article.Id), LogLevel.Info);
+                    p = ConvertToPost(article, categories, videoClient);
 
-                    Category[] categories = GetNewsItemCategories(ni);
-                    foreach (Category c in categories)
-                    {
-                        Category ca = FindCategory(c);
-                        if (ca == null)
-                        {
-                            if (c.Save() == SaveAction.Insert)
-                            {
-                                Log(string.Format("Imported new category '{0}'.", c.Title.Trim()), LogLevel.Info);
-                                p.Categories.Add(c);
-                            }
-                        }
-                        else
-                            p.Categories.Add(ca);
-                    }
+                    ImportCategories(p);
 
-                    // it should noted that, technically, the xml can specify more than one photo.
-                    PhotoInstance? thumbnail = GetPhotoInstance(ni, new enumeratedTypes.enumPhotoInstanceType[] { enumeratedTypes.enumPhotoInstanceType.Thumbnail, enumeratedTypes.enumPhotoInstanceType.Small });
-                    PhotoInstance? fullSizePhoto = GetPhotoInstance(ni, enumeratedTypes.enumPhotoInstanceType.Large);
-
-                    if (thumbnail != null || fullSizePhoto != null)
-                    {
-                        string thumbnailPath = string.Empty;
-                        string fullSizePhotoPath = string.Empty;
-                        int photoImportCount = 0;
-
-                        string physicalPicsPath = HttpContext.Current.Server.MapPath(Path.Combine(Blog.CurrentInstance.VirtualPath, "pics"));
-                        string fullSizePhysicalPath = string.Empty;
-                        string thumbnailPhysicalPath = string.Empty;
-                        string webrootUri = global::BlogEngine.Core.Blog.CurrentInstance.AbsoluteWebRoot.ToString();
-                        string webrootAuthorityUri = global::BlogEngine.Core.Blog.CurrentInstance.AbsoluteWebRootAuthority.ToString();
-                        string picsUri = webrootUri.Substring(webrootUri.IndexOf(webrootAuthorityUri) + webrootAuthorityUri.Length) + "pics/";
-
-                        if (fullSizePhoto != null && ImportPhoto(fullSizePhoto, physicalPicsPath, out fullSizePhysicalPath))
-                        {
-                            photoImportCount++;
-                            p.Content = AppendImageToContent(fullSizePhoto.Value, picsUri + Path.GetFileName(fullSizePhoto.Value.Url), p.Content, "article-img-frame", "", true);
-                        }
-
-                        if (thumbnail != null && ImportPhoto(thumbnail, physicalPicsPath, out thumbnailPhysicalPath))
-                        {
-                            photoImportCount++;
-                            p.Description = AppendImageToContent(thumbnail.Value, picsUri + Path.GetFileName(thumbnail.Value.Url), p.Description, "article-thumbnail-frame");
-                        }
-
-                        if (photoImportCount > 0)
-                            Log(string.Format("Imported {0} photo{1}.", photoImportCount, (photoImportCount != 1 ? "s" : "")), LogLevel.Info);
-                        else
-                            Log("Warning: could not import any photos.", LogLevel.Warning);
-                    }
+                    PhotoInstance? thumbnail = GetPhotoInstance(article, photos, photoClient, scaleAxis, 180);
+                    PhotoInstance? fullSizePhoto = GetPhotoInstance(article, photos, photoClient, scaleAxis, 500);
+                    ImportPhotos(p, thumbnail, fullSizePhoto);
 
                     if (!p.Valid)
                     {
@@ -138,12 +162,131 @@ namespace Brafton.BlogEngine
                         p.Save();
                 }
             }
-            Post.Reload();
+        }
 
-            DateTime endTime = DateTime.Now;
-            TimeSpan elapsed = endTime - startTime;
+        private void ImportArticles()
+        {
+            string apiKey = _settings.GetSingleValue("ApiKey");
+            string baseUrl = _settings.GetSingleValue("BaseUrl");
 
-            Log(string.Format("Import finished; took {0}.", elapsed.ToString()), LogLevel.Debug);
+            if (string.IsNullOrEmpty(apiKey))
+            {
+                Log("API key not set. Stopping.", LogLevel.Error);
+                return;
+            }
+
+            if (!ValidateGuid(apiKey))
+            {
+                Log("Invalid API Key. Stopping.", LogLevel.Error);
+                return;
+            }
+
+            Uri baseUri = new Uri(baseUrl);
+            Uri feedUri = new Uri(baseUri, apiKey);
+
+            Log(string.Format("Starting import at feed URI '{0}'.", feedUri.ToString()), LogLevel.Debug);
+            ApiContext api = new ApiContext(apiKey, baseUrl);
+
+            foreach (newsItem ni in api.News)
+            {
+                Post p = FindPost(ni);
+
+                if (p == null)
+                {
+                    Log(string.Format("Importing new post '{0}' (ID {1}).", ni.headline.Trim(), ni.id), LogLevel.Info);
+                    p = ConvertToPost(ni);
+
+                    ImportCategories(p);
+
+                    // it should noted that, technically, the xml can specify more than one photo.
+                    PhotoInstance? thumbnail = GetPhotoInstance(ni, new enumeratedTypes.enumPhotoInstanceType[] { enumeratedTypes.enumPhotoInstanceType.Thumbnail, enumeratedTypes.enumPhotoInstanceType.Small });
+                    PhotoInstance? fullSizePhoto = GetPhotoInstance(ni, enumeratedTypes.enumPhotoInstanceType.Large);
+
+                    ImportPhotos(p, thumbnail, fullSizePhoto);
+
+                    if (!p.Valid)
+                    {
+                        Log(string.Format("Error: post '{0}' invalid: '{1}'", p.ValidationMessage), LogLevel.Error);
+                        continue;
+                    }
+                    else
+                        p.Save();
+                }
+            }
+        }
+
+        private void ImportPhotos(Post p, PhotoInstance? thumbnail, PhotoInstance? fullSizePhoto)
+        {
+            if (thumbnail != null || fullSizePhoto != null)
+            {
+                string thumbnailPath = string.Empty;
+                string fullSizePhotoPath = string.Empty;
+                int photoImportCount = 0;
+
+                string physicalPicsPath = HttpContext.Current.Server.MapPath(Path.Combine(Blog.CurrentInstance.VirtualPath, "pics"));
+                string fullSizePhysicalPath = string.Empty;
+                string thumbnailPhysicalPath = string.Empty;
+                string webrootUri = global::BlogEngine.Core.Blog.CurrentInstance.AbsoluteWebRoot.ToString();
+                string webrootAuthorityUri = global::BlogEngine.Core.Blog.CurrentInstance.AbsoluteWebRootAuthority.ToString();
+                string picsUri = webrootUri.Substring(webrootUri.IndexOf(webrootAuthorityUri) + webrootAuthorityUri.Length) + "pics/";
+
+                if (fullSizePhoto != null && ImportPhoto(fullSizePhoto, physicalPicsPath, out fullSizePhysicalPath, out fullSizePhotoPath))
+                {
+                    photoImportCount++;
+                    p.Content = AppendImageToContent(fullSizePhoto.Value, picsUri + fullSizePhotoPath, p.Content, "article-img-frame", "", true);
+                }
+
+                if (thumbnail != null && ImportPhoto(thumbnail, physicalPicsPath, out thumbnailPhysicalPath, out thumbnailPath))
+                {
+                    photoImportCount++;
+                    p.Description = AppendImageToContent(thumbnail.Value, picsUri + thumbnailPath, p.Description, "article-thumbnail-frame");
+                }
+
+                if (photoImportCount > 0)
+                    Log(string.Format("Imported {0} photo{1}.", photoImportCount, (photoImportCount != 1 ? "s" : "")), LogLevel.Info);
+                else
+                    Log("Warning: could not import any photos.", LogLevel.Warning);
+            }
+        }
+
+        private void ImportCategories(Post p)
+        {
+            List<Category> added = new List<Category>();
+
+            foreach (Category c in p.Categories)
+            {
+                Category ca = FindCategory(c);
+                if (ca == null)
+                {
+                    if (c.Save() == SaveAction.Insert)
+                    {
+                        Log(string.Format("Imported new category '{0}'.", c.Title.Trim()), LogLevel.Info);
+                        added.Add(c);
+                    }
+                }
+                else
+                    added.Add(ca);
+            }
+
+            p.Categories.Clear();
+            p.Categories.AddRange(added);
+        }
+
+        private Post FindPost(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle a)
+        {
+            return Post.Posts.Find(p => p.Title.Trim() == a.Fields["title"].Trim());
+        }
+
+        private bool ValidateVideoPublicKey(string publicKey)
+        {
+            Regex reg = new Regex("[a-f0-9]{8}", RegexOptions.IgnoreCase);
+            return reg.IsMatch(publicKey);
+        }
+
+        private bool ValidateGuid(string guid)
+        {
+            Regex reg = new Regex("[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}", RegexOptions.IgnoreCase);
+            return reg.IsMatch(guid);
         }
 
         private string AppendImageToContent(PhotoInstance photoInstance, string virtualPath, string content, string cssClass, string imageLink, bool useCaption)
@@ -169,9 +312,9 @@ namespace Brafton.BlogEngine
             return AppendImageToContent(photoInstance, virtualPath, content, cssClass, "", false);
         }
 
-        private bool ImportPhoto(PhotoInstance? photoInstance, string picsPath, out string physicalPhotoPath)
+        private bool ImportPhoto(PhotoInstance? photoInstance, string picsPath, out string physicalPhotoPath, out string photoPath)
         {
-            string filename = Path.GetFileName(photoInstance.Value.Url);
+            string filename = photoInstance.Value.DestinationFileName;
             string physicalPath = Path.Combine(picsPath, filename);
             using (WebClient wc = new WebClient())
             {
@@ -183,12 +326,19 @@ namespace Brafton.BlogEngine
                 {
                     Log(string.Format("Error: Could not import photo '{0}': {1}", photoInstance.Value.Url, ex.Message), LogLevel.Error);
                     physicalPhotoPath = string.Empty;
+                    photoPath = string.Empty;
                     return false;
                 }
             }
 
             physicalPhotoPath = physicalPath;
+            photoPath = filename;
             return true;
+        }
+
+        private Category FindCategory(string catName)
+        {
+            return FindCategory(new Category(catName, ""));
         }
 
         private Category FindCategory(Category c)
@@ -204,6 +354,44 @@ namespace Brafton.BlogEngine
                 cats.Add(new Category(catEn.Current.name, ""));
 
             return cats.ToArray();
+        }
+
+        private PhotoInstance? GetPhotoInstance(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle article, AdferoVideoDotNet.AdferoArticles.ArticlePhotos.AdferoArticlePhotosClient photos, AdferoVideoDotNet.AdferoPhotos.AdferoPhotoClient photoClient, string scaleAxis, int scale)
+        {
+            PhotoInstance? inst = null;
+
+            AdferoVideoDotNet.AdferoArticles.ArticlePhotos.AdferoArticlePhotoList photoList = photos.ListForArticle(article.Id, 0, 100);
+            if (photoList.TotalCount > 0)
+            {
+                AdferoVideoDotNet.AdferoArticles.ArticlePhotos.AdferoArticlePhoto apho = photos.Get(photoList.Items[0].Id);
+                int photoId = apho.SourcePhotoId;
+                AdferoVideoDotNet.AdferoPhotos.Photos.AdferoPhoto pho = photoClient.Photos().GetScaleLocationUrl(photoId, scaleAxis, scale);
+                string photoUrl = pho.LocationUri;
+                string photoCaption = photos.Get(photoList.Items[0].Id).Fields["caption"];
+
+                enumeratedTypes.enumPhotoOrientation ori = enumeratedTypes.enumPhotoOrientation.Landscape;
+                if (scaleAxis == AdferoVideoDotNet.AdferoPhotos.Photos.AdferoScaleAxis.Y)
+                    ori = enumeratedTypes.enumPhotoOrientation.Portrait;
+
+                string cleanedUrl = photoUrl;
+                if (cleanedUrl.IndexOf('?') >= 0)
+                    cleanedUrl = cleanedUrl.Substring(0, cleanedUrl.IndexOf('?'));
+
+                inst = new PhotoInstance()
+                {
+                    AltText = photoCaption,
+                    Caption = photoCaption,
+                    DestinationFileName = Slugify(article.Fields["title"]) + "-" + scale + Path.GetExtension(cleanedUrl),
+                    Height = 0,
+                    Id = apho.Id,
+                    Orientation = ori,
+                    Type = enumeratedTypes.enumPhotoInstanceType.Custom,
+                    Url = photoUrl,
+                    Width = 0
+                };
+            }
+
+            return inst;
         }
 
         private PhotoInstance? GetPhotoInstance(newsItem ni, enumeratedTypes.enumPhotoInstanceType photoType)
@@ -233,6 +421,13 @@ namespace Brafton.BlogEngine
                         phIns.Type = phIEn.Current.type;
                         phIns.Type = phType;
 
+                        string cleanedUrl = phIns.Url;
+                        if (cleanedUrl.IndexOf('?') >= 0)
+                            cleanedUrl = cleanedUrl.Substring(0, cleanedUrl.IndexOf('?'));
+
+                        string phTypeSlug = Slugify(phType);
+                        phIns.DestinationFileName = Slugify(ni.headline) + (phTypeSlug == "" ? "" : "-" + phTypeSlug) + Path.GetExtension(cleanedUrl);
+
                         found = true;
                         break;
                     }
@@ -252,6 +447,52 @@ namespace Brafton.BlogEngine
             if (!found)
                 return null;
             return phIns;
+        }
+
+        private string Slugify(enumeratedTypes.enumPhotoInstanceType phType)
+        {
+            switch (phType)
+            {
+                case enumeratedTypes.enumPhotoInstanceType.Small:
+                    return "small";
+                case enumeratedTypes.enumPhotoInstanceType.Medium:
+                    return "med";
+                case enumeratedTypes.enumPhotoInstanceType.Thumbnail:
+                    return "thumb";
+                default:
+                    return "";
+            }
+        }
+
+        private Post ConvertToPost(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle article, AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategoriesClient categories, AdferoVideoClient videoClient)
+        {
+            Post p = new Post();
+
+            p.Author = "Admin";
+            AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategoryList categoryList = categories.ListForArticle(article.Id, 0, 100);
+            for (int i = 0; i < categoryList.TotalCount; i++)
+            {
+                AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategory category = categories.Get(categoryList.Items[i].Id);
+                p.Categories.Add(new Category(category.Name.Trim(), ""));
+            }
+
+            string embedCode = videoClient.VideoPlayers().GetWithFallback(article.Id, AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RedBean, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0),AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RcFlashPlayer, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0)).EmbedCode;
+            p.Content = string.Format("<div class=\"videoContainer\">{0}</div> {1}", embedCode, article.Fields["content"]);
+
+            p.DateCreated = DateTime.Parse(article.Fields["date"]);
+            p.DateModified = DateTime.Parse(article.Fields["lastModifiedDate"]);
+            p.Description = article.Fields["extract"];
+
+            p.Slug = Slugify(article.Fields["title"]);
+            p.Title = article.Fields["title"].Trim();
+
+            return p;
+        }
+
+        private string Slugify(string input)
+        {
+            Regex alphaNumeric = new Regex("[^a-zA-Z0-9]+");
+            return alphaNumeric.Replace(input.ToLower().Trim(), "-");
         }
 
         private Post ConvertToPost(newsItem ni)
@@ -281,8 +522,7 @@ namespace Brafton.BlogEngine
             p.DateModified = ni.lastModifiedDate;
             p.Description = ni.extract;
 
-            Regex alphaNumeric = new Regex("[^a-zA-Z0-9]+");
-            p.Slug = alphaNumeric.Replace(ni.headline.ToLower().Trim(), "-");
+            p.Slug = Slugify(ni.headline);
 
             if (!string.IsNullOrEmpty(ni.htmlMetaKeywords))
                 p.Tags.AddRange(ni.htmlMetaKeywords.Split(new char[] { ',' }));
@@ -305,7 +545,7 @@ namespace Brafton.BlogEngine
             string[] providers = { "http://api.brafton.com/", "http://api.contentlead.com/", "http://api.castleford.com.au/" };
             settings.AddValue("BaseUrl", providers, providers[0]);
 
-            settings.AddParameter("ApiKey", "API Key", 36, true);
+            settings.AddParameter("ApiKey", "API Key", 36);
 
             settings.AddParameter("Interval", "Upload Interval (minutes)", 6, true);
             settings.AddValue("Interval", 180);
@@ -317,6 +557,18 @@ namespace Brafton.BlogEngine
 
             settings.AddParameter("LastUpload", "Time of last upload");
             settings.AddValue("LastUpload", DateTime.MinValue.ToString("u"));
+
+            settings.AddParameter("ImportContent", "Import Content");
+            settings.SetParameterType("ImportContent", ParameterType.DropDown);
+            string[] contentTypes = { "Articles Only", "Videos Only", "Articles and Video" };
+            settings.AddValue("ImportContent", contentTypes, contentTypes[0]);
+
+            settings.AddParameter("VideoPublicKey", "Public Key");
+
+            settings.AddParameter("VideoSecretKey", "Secret Key");
+
+            settings.AddParameter("VideoFeedNumber", "Feed Number");
+            settings.SetParameterType("VideoFeedNumber", ParameterType.Integer);
 
             _settings = ExtensionManager.InitSettings("BraftonArticleImporter", settings);
         }
@@ -374,5 +626,6 @@ namespace Brafton.BlogEngine
         public string Url, Caption, AltText;
         public enumeratedTypes.enumPhotoInstanceType Type;
         public enumeratedTypes.enumPhotoOrientation Orientation;
+        public string DestinationFileName;
     }
 }
