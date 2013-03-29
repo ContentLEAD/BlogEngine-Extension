@@ -57,6 +57,76 @@ namespace Brafton.BlogEngine
                     _logLock = null;
                 }
             }
+
+            if (e.Location == ServingLocation.SinglePost)
+                AddOpenGraphTags();
+        }
+
+        protected virtual void AddOpenGraphTags()
+        {
+            HttpContext context = HttpContext.Current;
+            Guid postId = default(Guid);
+            if (!Guid.TryParse(context.Request.QueryString["id"], out postId))
+                return;
+
+            if (context.CurrentHandler is System.Web.UI.Page)
+            {
+                System.Web.UI.Page page = (System.Web.UI.Page)context.CurrentHandler;
+                Post post = Post.GetPost(postId);
+
+                AppendOpenGraphPrefix(page, "og: http://ogp.me/ns#");
+                AppendOpenGraphPrefix(page, "article: http://ogp.me/ns/article#");
+
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Type, "article"));
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Site_Name, BlogSettings.Instance.Name));
+				page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Url, post.AbsoluteLink.ToString()));
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Title, post.Title));
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Article__Published_Time, post.DateCreated.ToString(@"yyyy-MM-ddTHH\:mm\:ss.fffffffzzz", System.Globalization.CultureInfo.InvariantCulture)));
+				
+				string desc = GetCleanPostDescription(post.Description);
+				if (!string.IsNullOrEmpty(desc))
+					page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Description, desc));
+				
+                string postImage = GetPostImageUrl(post);
+                if (!string.IsNullOrEmpty(postImage))
+                    page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Image, postImage));
+            }
+        }
+
+        private void AppendOpenGraphPrefix(System.Web.UI.Page page, string content)
+        {
+            string prefix = page.Header.Attributes["prefix"] ?? "";
+            page.Header.Attributes["prefix"] = (prefix + " " + content).Trim();
+        }
+
+        private string GetCleanPostDescription(string desc)
+        {
+            if (string.IsNullOrEmpty(desc))
+                return null;
+
+            return Regex.Replace(desc, "<.*?>", string.Empty).Trim();
+        }
+
+        private string GetPostImageUrl(Post post)
+        {
+            Regex r = new Regex("<img.*?src=\"(.*?)\".*?/>");
+            Match m = r.Match(post.Content);
+
+            if (!m.Success)
+                return null;
+
+            return Utils.ConvertToAbsolute(m.Groups[1].ToString()).ToString();
+        }
+
+        protected System.Web.UI.Control GenerateOpenGraphTag(OpenGraphTag openGraphTag, string content)
+        {
+            StringBuilder sb = new StringBuilder();
+            string tag = openGraphTag.ToString("g").Replace("__", ":").ToLower();
+
+            sb.AppendFormat("<meta property=\"og:{0}\" content=\"{1}\" />", tag, content);
+            sb.AppendLine();
+
+            return new System.Web.UI.LiteralControl(sb.ToString());
         }
 
         protected void Import()
@@ -592,7 +662,18 @@ namespace Brafton.BlogEngine
         }
     }
 
-    public enum LogLevel
+    enum OpenGraphTag
+    {
+        Title,
+        Type,
+        Url,
+        Image,
+        Description,
+        Article__Published_Time,
+        Site_Name
+    }
+
+    enum LogLevel
     {
         /// <summary>
         /// Critical conditions.
