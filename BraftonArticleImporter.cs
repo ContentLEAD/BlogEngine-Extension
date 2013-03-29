@@ -17,7 +17,7 @@ namespace Brafton.BlogEngine
     /// <summary>
     /// Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.
     /// </summary>
-    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.4", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
+    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.5.dev", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
     class BraftonArticleImporter
     {
         protected ExtensionSettings _settings;
