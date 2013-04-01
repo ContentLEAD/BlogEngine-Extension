@@ -17,7 +17,7 @@ namespace Brafton.BlogEngine
     /// <summary>
     /// Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.
     /// </summary>
-    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.4", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
+    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.5", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
     class BraftonArticleImporter
     {
         protected ExtensionSettings _settings;
@@ -57,6 +57,76 @@ namespace Brafton.BlogEngine
                     _logLock = null;
                 }
             }
+
+            if (e.Location == ServingLocation.SinglePost)
+                AddOpenGraphTags();
+        }
+
+        protected virtual void AddOpenGraphTags()
+        {
+            HttpContext context = HttpContext.Current;
+            Guid postId = default(Guid);
+            if (!Guid.TryParse(context.Request.QueryString["id"], out postId))
+                return;
+
+            if (context.CurrentHandler is System.Web.UI.Page)
+            {
+                System.Web.UI.Page page = (System.Web.UI.Page)context.CurrentHandler;
+                Post post = Post.GetPost(postId);
+
+                AppendOpenGraphPrefix(page, "og: http://ogp.me/ns#");
+                AppendOpenGraphPrefix(page, "article: http://ogp.me/ns/article#");
+
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Type, "article"));
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Site_Name, BlogSettings.Instance.Name));
+				page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Url, post.AbsoluteLink.ToString()));
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Title, post.Title));
+                page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Article__Published_Time, post.DateCreated.ToString(@"yyyy-MM-ddTHH\:mm\:ss.fffffffzzz", System.Globalization.CultureInfo.InvariantCulture)));
+				
+				string desc = GetCleanPostDescription(post.Description);
+				if (!string.IsNullOrEmpty(desc))
+					page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Description, desc));
+				
+                string postImage = GetPostImageUrl(post);
+                if (!string.IsNullOrEmpty(postImage))
+                    page.Header.Controls.Add(GenerateOpenGraphTag(OpenGraphTag.Image, postImage));
+            }
+        }
+
+        private void AppendOpenGraphPrefix(System.Web.UI.Page page, string content)
+        {
+            string prefix = page.Header.Attributes["prefix"] ?? "";
+            page.Header.Attributes["prefix"] = (prefix + " " + content).Trim();
+        }
+
+        private string GetCleanPostDescription(string desc)
+        {
+            if (string.IsNullOrEmpty(desc))
+                return null;
+
+            return Regex.Replace(desc, "<.*?>", string.Empty).Trim();
+        }
+
+        private string GetPostImageUrl(Post post)
+        {
+            Regex r = new Regex("<img.*?src=\"(.*?)\".*?/>");
+            Match m = r.Match(post.Content);
+
+            if (!m.Success)
+                return null;
+
+            return Utils.ConvertToAbsolute(m.Groups[1].ToString()).ToString();
+        }
+
+        protected System.Web.UI.Control GenerateOpenGraphTag(OpenGraphTag openGraphTag, string content)
+        {
+            StringBuilder sb = new StringBuilder();
+            string tag = openGraphTag.ToString("g").Replace("__", ":").ToLower();
+
+            sb.AppendFormat("<meta property=\"og:{0}\" content=\"{1}\" />", tag, content);
+            sb.AppendLine();
+
+            return new System.Web.UI.LiteralControl(sb.ToString());
         }
 
         protected void Import()
@@ -271,6 +341,14 @@ namespace Brafton.BlogEngine
             p.Categories.Clear();
             p.Categories.AddRange(added);
         }
+		
+        protected string GetCleanCategoryName(string catName)
+        {
+            // blogengine treats categories with dashes as child categories.
+            // HACK: this is an en dash.
+            // not quite the same, but avoids ophaning this category.
+            return catName.Replace("-", "–").Trim();
+        }
 
         private Post FindPost(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle a)
         {
@@ -473,7 +551,7 @@ namespace Brafton.BlogEngine
             for (int i = 0; i < categoryList.TotalCount; i++)
             {
                 AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategory category = categories.Get(categoryList.Items[i].Id);
-                p.Categories.Add(new Category(category.Name.Trim(), ""));
+                p.Categories.Add(new Category(GetCleanCategoryName(category.Name), ""));
             }
 
             string embedCode = videoClient.VideoPlayers().GetWithFallback(article.Id, AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RedBean, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0),AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RcFlashPlayer, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0)).EmbedCode;
@@ -501,7 +579,7 @@ namespace Brafton.BlogEngine
 
             p.Author = "Admin";
             foreach (category c in ni.categories)
-                p.Categories.Add(new Category(c.name, ""));
+                p.Categories.Add(new Category(GetCleanCategoryName(c.name), ""));
             p.Content = ni.text;
 
             string importedDate = _settings.GetSingleValue("ImportedDate");
@@ -592,7 +670,18 @@ namespace Brafton.BlogEngine
         }
     }
 
-    public enum LogLevel
+    enum OpenGraphTag
+    {
+        Title,
+        Type,
+        Url,
+        Image,
+        Description,
+        Article__Published_Time,
+        Site_Name
+    }
+
+    enum LogLevel
     {
         /// <summary>
         /// Critical conditions.
