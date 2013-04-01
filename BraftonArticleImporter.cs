@@ -341,6 +341,14 @@ namespace Brafton.BlogEngine
             p.Categories.Clear();
             p.Categories.AddRange(added);
         }
+		
+        protected string GetCleanCategoryName(string catName)
+        {
+            // blogengine treats categories with dashes as child categories.
+            // HACK: this is an en dash.
+            // not quite the same, but avoids ophaning this category.
+            return catName.Replace("-", "–").Trim();
+        }
 
         private Post FindPost(AdferoVideoDotNet.AdferoArticles.Articles.AdferoArticle a)
         {
@@ -543,7 +551,7 @@ namespace Brafton.BlogEngine
             for (int i = 0; i < categoryList.TotalCount; i++)
             {
                 AdferoVideoDotNet.AdferoArticles.Categories.AdferoCategory category = categories.Get(categoryList.Items[i].Id);
-                p.Categories.Add(new Category(category.Name.Trim(), ""));
+                p.Categories.Add(new Category(GetCleanCategoryName(category.Name), ""));
             }
 
             string embedCode = videoClient.VideoPlayers().GetWithFallback(article.Id, AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RedBean, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0),AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoPlayers.RcFlashPlayer, new AdferoVideoDotNet.AdferoArticlesVideoExtensions.VideoPlayers.AdferoVersion(1,0,0)).EmbedCode;
@@ -571,7 +579,7 @@ namespace Brafton.BlogEngine
 
             p.Author = "Admin";
             foreach (category c in ni.categories)
-                p.Categories.Add(new Category(c.name, ""));
+                p.Categories.Add(new Category(GetCleanCategoryName(c.name), ""));
             p.Content = ni.text;
 
             string importedDate = _settings.GetSingleValue("ImportedDate");
