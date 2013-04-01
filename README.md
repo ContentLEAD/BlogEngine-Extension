@@ -13,7 +13,7 @@ The Brafton Article Importer loads custom content from Brafton, ContentLEAD, and
 ## Configuration ##
 In the BlogEngine Admin section, browse to **Appearance** > **BraftonArticleImporter**. Here you will find settings to configure the importer, as described below.
 
-These settings are for the version 0.4; if you have a lower version please update before referencing this document.
+These settings are for version 0.5; if you have a lower version please update before referencing this document.
 
 ### Standard Settings ###
 These settings are **required** for the importer to work properly.
