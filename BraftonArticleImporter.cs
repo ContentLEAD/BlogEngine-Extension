@@ -17,7 +17,7 @@ namespace Brafton.BlogEngine
     /// <summary>
     /// Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.
     /// </summary>
-    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.5", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
+    [Extension("Imports articles from Brafton, ContentLEAD, and Castleford XML feeds.", "0.5.1", "<a href=\"http://contentlead.com/\">ContentLEAD</a>")]
     class BraftonArticleImporter
     {
         protected ExtensionSettings _settings;
@@ -121,9 +121,13 @@ namespace Brafton.BlogEngine
         protected System.Web.UI.Control GenerateOpenGraphTag(OpenGraphTag openGraphTag, string content)
         {
             StringBuilder sb = new StringBuilder();
-            string tag = openGraphTag.ToString("g").Replace("__", ":").ToLower();
+			string tag = openGraphTag.ToString("g").ToLower();
+			if (tag.Contains("__"))
+				tag = tag.Replace("__", ":").ToLower();
+			else
+				tag = "og:" + tag;
 
-            sb.AppendFormat("<meta property=\"og:{0}\" content=\"{1}\" />", tag, content);
+            sb.AppendFormat("<meta property=\"{0}\" content=\"{1}\" />", tag, content);
             sb.AppendLine();
 
             return new System.Web.UI.LiteralControl(sb.ToString());
