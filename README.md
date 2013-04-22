@@ -9,6 +9,7 @@ The Brafton Article Importer loads custom content from Brafton, ContentLEAD, and
 ## Installation ##
 1. If you have an old version of the extension installed, *you must delete it*. Your settings will be saved.
 2. Extract the contents of the zip file into the **App_Code/Extensions folder**.
+3. In order to enable article pictures, the BlogEngine "pics" folder must be writable by the anonymous user.
 
 ## Configuration ##
 In the BlogEngine Admin section, browse to **Appearance** > **BraftonArticleImporter**. Here you will find settings to configure the importer, as described below.
