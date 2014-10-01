@@ -191,8 +191,8 @@ namespace Brafton.BlogEngine
 
             Log("Starting video import.", LogLevel.Debug);
 
-            string baseUrl = "http://api.video.brafton.com/v2/";
-            string basePhotoUrl = "http://pictures.directnews.co.uk/v2/";
+            string baseUrl = "http://livevideo.api.brafton.com/v2/";
+            string basePhotoUrl = "http://pictures.brafton.com/v2/";
             AdferoVideoClient videoClient = new AdferoVideoClient(baseUrl, publicKey, secretKey);
             AdferoClient client = new AdferoClient(baseUrl, publicKey, secretKey);
             AdferoPhotoClient photoClient = new AdferoPhotoClient(basePhotoUrl);
